@@ -1,0 +1,84 @@
+{
+    "id": "48S239579N1696452",
+    "intent": "AUTHORIZE",
+    "purchase_units": [{
+      "reference_id": "default",
+      "amount": {
+        "currency_code": "USD",
+        "value": "30.00"
+      },
+      "payee": {
+        "email_address": "payee@example.com",
+        "merchant_id": "JK9AB28SRU4XL"
+      },
+      "shipping": {
+        "name": {
+          "full_name": "Firstname Lastname"
+        },
+        "address": {
+          "address_line_1": "123 Main St.",
+          "admin_area_2": "Anytown",
+          "admin_area_1": "CA",
+          "postal_code": "12345",
+          "country_code": "US"
+        }
+      },
+      "payments": {
+        "authorizations": [{
+          "status": "CREATED",
+          "id": "66P728836U784324A",
+          "amount": {
+            "currency_code": "USD",
+            "value": "30.00"
+          },
+          "seller_protection": {
+            "status": "ELIGIBLE",
+            "dispute_categories": ["ITEM_NOT_RECEIVED", "UNAUTHORIZED_TRANSACTION"]
+          },
+          "expiration_time": "2020-01-01T15:57:51Z",
+          "links": [{
+            "href": "https://api-m.sandbox.paypal.com/v2/payments/authorizations/66P728836U784324A",
+            "rel": "self",
+            "method": "GET"
+          }, {
+            "href": "https://api-m.sandbox.paypal.com/v2/payments/authorizations/66P728836U784324A/capture",
+            "rel": "capture",
+            "method": "POST"
+          }, {
+            "href": "https://api-m.sandbox.paypal.com/v2/payments/authorizations/66P728836U784324A/void",
+            "rel": "void",
+            "method": "POST"
+          }, {
+            "href": "https://api-m.sandbox.paypal.com/v2/payments/authorizations/66P728836U784324A/reauthorize",
+            "rel": "reauthorize",
+            "method": "POST"
+          }, {
+            "href": "https://api-m.sandbox.paypal.com/v2/checkout/orders/48S239579N1696452",
+            "rel": "up",
+            "method": "GET"
+          }],
+          "create_time": "2020-02-03T15:57:51Z",
+          "update_time": "2020-02-03T15:57:51Z"
+        }]
+      }
+    }],
+    "payer": {
+      "name": {
+        "given_name": "Firstname",
+        "surname": "Lastname"
+      },
+      "email_address": "payer@example.com",
+      "payer_id": "8Y7QBG68GYPHQ",
+      "address": {
+        "country_code": "US"
+      }
+    },
+    "create_time": "2020-02-03T15:57:17Z",
+    "update_time": "2020-02-03T15:57:51Z",
+    "links": [{
+      "href": "https://api-m.sandbox.paypal.com/v2/checkout/orders/48S239579N1696452",
+      "rel": "self",
+      "method": "GET"
+    }],
+    "status": "COMPLETED"
+  }
