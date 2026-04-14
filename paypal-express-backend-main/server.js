@@ -5,7 +5,7 @@ const cors = require('cors');
 if (process.env.NODE_ENV !== "production") {
     require("dotenv").config();
 }
-const PORT = process.env.PORT || 5000;;
+const PORT = process.env.PORT || 5000;
 process.env.SUPPRESS_NO_CONFIG_WARNING = 'y';
 
 const connectDB = require("./config/db");

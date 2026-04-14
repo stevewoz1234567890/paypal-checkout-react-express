@@ -3,7 +3,7 @@ const router = express.Router();
 const axios = require("axios");
 const qs = require('qs');
 
-const { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_CLIENT_EMAIL, BASE_URL } = process.env;
+const { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, BASE_URL } = process.env;
 
 /**
  * Generate an OAuth 2.0 access token for authenticating with PayPal REST APIs.
@@ -13,6 +13,9 @@ const generateAccessToken = async () => {
     try {
         if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
             throw new Error("MISSING_API_CREDENTIALS");
+        }
+        if (!BASE_URL) {
+            throw new Error("MISSING_BASE_URL");
         }
 
         const response = await axios(
@@ -32,10 +35,10 @@ const generateAccessToken = async () => {
                 }
             });
 
-        const data = await response.data;
-        return data.access_token;
+        return response.data.access_token;
     } catch (error) {
         console.error("Failed to generate Access Token:", error);
+        throw error;
     }
 };
 
@@ -50,9 +53,6 @@ const createOrder = async (purchase_info) => {
         purchase_info,
     );
 
-    const accessToken = await generateAccessToken();
-    const url = `${BASE_URL}/v2/checkout/orders`;
-
     let payload = {};
     if (purchase_info.paymentmethod === '_deposit') {
         payload = {
@@ -61,45 +61,33 @@ const createOrder = async (purchase_info) => {
                 {
                     amount: {
                         currency_code: "USD",
-                        value: purchase_info.amount,
+                        value: String(purchase_info.amount).trim(),
                     },
                 },
             ],
         };
     } else if (purchase_info.paymentmethod === '_withdraw') {
+        // Payout goes to payee when the customer completes checkout in the PayPal button.
+        // Do not send credentials in API payloads; use sandbox accounts for testing.
+        const payeeEmail = String(purchase_info.email).trim();
         payload = {
             intent: "CAPTURE",
-            payment_source: {
-                paypal: {
-                    email_address: PAYPAL_CLIENT_EMAIL,
-                    password: 'P!q9Z<5g',
-                    account_id: "WV9P4RFREDQBU",
-                    account_status: "VERIFIED",
-                    name: {
-                        given_name: "John",
-                        surname: "Doe"
-                    },
-                    address: {
-                        country_code: "US"
-                    }
-                }
-            },
             purchase_units: [
                 {
                     amount: {
                         currency_code: "USD",
-                        value: purchase_info.amount,
+                        value: String(purchase_info.amount).trim(),
                     },
                     payee: {
-                        email_address: purchase_info.email
-                    }
+                        email_address: payeeEmail,
+                    },
                 },
             ],
-            // payer: {
-            //     email_address: PAYPAL_CLIENT_EMAIL
-            // },
         };
     }
+
+    const accessToken = await generateAccessToken();
+    const url = `${BASE_URL}/v2/checkout/orders`;
 
     const response = await axios(
         {
@@ -146,27 +134,67 @@ const captureOrder = async (orderID) => {
     return handleResponse(response);
 };
 
-async function handleResponse(response) {
-    try {
-        const jsonResponse = await response.data;
-        return {
-            jsonResponse,
-            httpStatusCode: response.status,
-        };
-    } catch (err) {
-        const errorMessage = await response.text();
-        throw new Error(errorMessage);
+function handleResponse(response) {
+    return {
+        jsonResponse: response.data,
+        httpStatusCode: response.status,
+    };
+}
+
+function badRequest(res, message) {
+    return res.status(400).json({ error: message });
+}
+
+/**
+ * Validates input before calling PayPal (OAuth must not run first, or clients see misleading errors).
+ */
+function validatePurchaseInfo(purchase_info) {
+    if (!purchase_info || typeof purchase_info !== "object") {
+        return "purchase_info is required.";
     }
+    const { paymentmethod, amount, email } = purchase_info;
+    if (paymentmethod !== "_deposit" && paymentmethod !== "_withdraw") {
+        return "paymentmethod must be _deposit or _withdraw.";
+    }
+    if (amount === undefined || amount === null || String(amount).trim() === "") {
+        return "amount is required.";
+    }
+    const value = String(amount).trim();
+    if (!/^\d+(\.\d{1,2})?$/.test(value)) {
+        return "amount must be a positive decimal with at most 2 fractional digits (e.g. 10 or 10.00).";
+    }
+    if (paymentmethod === "_withdraw") {
+        const payee = email != null ? String(email).trim() : "";
+        if (!payee) {
+            return "email (payee) is required for _withdraw.";
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payee)) {
+            return "email must be a valid payee email address.";
+        }
+    }
+    return null;
 }
 
 router.post("/", async (req, res) => {
     try {
-        // use the purchase information passed from the front-end to calculate the order amount detals
         const { purchase_info } = req.body;
+        const validationError = validatePurchaseInfo(purchase_info);
+        if (validationError) {
+            return badRequest(res, validationError);
+        }
         const { jsonResponse, httpStatusCode } = await createOrder(purchase_info);
         res.status(httpStatusCode).json(jsonResponse);
     } catch (error) {
         console.error("Failed to create order:", error);
+        if (error.response) {
+            return res.status(error.response.status).json(error.response.data);
+        }
+        if (error.message === "MISSING_API_CREDENTIALS" || error.message === "MISSING_BASE_URL") {
+            return res.status(500).json({ error: "Server PayPal credentials or BASE_URL are not configured." });
+        }
+        if (error.message === "MISSING_PAYEE_EMAIL") {
+            return badRequest(res, "email (payee) is required for _withdraw.");
+        }
         res.status(500).json({ error: "Failed to create order." });
     }
 });
@@ -177,7 +205,10 @@ router.post("/:orderID/capture", async (req, res) => {
         const { jsonResponse, httpStatusCode } = await captureOrder(orderID);
         res.status(httpStatusCode).json(jsonResponse);
     } catch (error) {
-        console.error("Failed to create order:", error);
+        console.error("Failed to capture order:", error);
+        if (error.response) {
+            return res.status(error.response.status).json(error.response.data);
+        }
         res.status(500).json({ error: "Failed to capture order." });
     }
 });
